@@ -20,7 +20,6 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 
 # In[2]:
@@ -70,12 +69,12 @@ y.head(6)
 y.value_counts(True)
 
 
-# ## Set aside 10% of the data for testing
+# ## Set aside 20% of the data for testing
 
 # In[9]:
 
 # Typically, this can only be done where the number of mutations is large enough
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=0)
 'Size: {:,} features, {:,} training samples, {:,} testing samples'.format(len(X.columns), len(X_train), len(X_test))
 
 
@@ -83,21 +82,19 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_
 
 # In[10]:
 
-get_ipython().run_cell_magic('time', '', 'scale = StandardScaler()\nX_train_scale = scale.fit_transform(X_train)\nX_test_scale = scale.transform(X_test)')
+get_ipython().run_cell_magic('time', '', 'scale_pre = StandardScaler()\nX_train_scale = scale_pre.fit_transform(X_train)\nX_test_scale = scale_pre.transform(X_test)')
 
 
 # ## Reducing noise via PCA
 
 # In[11]:
 
-get_ipython().run_cell_magic('time', '', 'n_components = 50\npca = PCA(n_components=n_components, random_state=0)\nX_train_pca = pca.fit_transform(X_train_scale)\nX_test_pca = pca.transform(X_test_scale)')
+get_ipython().run_cell_magic('time', '', 'n_components = 30\npca = PCA(n_components=n_components, random_state=0)\nX_train_pca = pca.fit_transform(X_train_scale)\nX_test_pca = pca.transform(X_test_scale)')
 
-
-# ## Dimensionality reduction via LDA
 
 # In[12]:
 
-get_ipython().run_cell_magic('time', '', '\nlda = LinearDiscriminantAnalysis(n_components=2)\nX_train_lda = lda.fit_transform(X_train_pca, y_train)\nX_test_lda = lda.transform(X_test_pca)')
+get_ipython().run_cell_magic('time', '', 'scale_post = StandardScaler()\nX_train_scale = scale_post.fit_transform(X_train_pca)\nX_test_scale = scale_post.transform(X_test_pca)')
 
 
 # ## Parameters
@@ -112,7 +109,7 @@ param_grid = {
 
 # In[14]:
 
-get_ipython().run_cell_magic('time', '', "clf = SGDClassifier(random_state=0, class_weight='balanced', loss='log', penalty='elasticnet')\ncv = GridSearchCV(estimator=clf, param_grid=param_grid, n_jobs=-1, scoring='roc_auc')\ncv.fit(X = X_train_lda, y=y_train)")
+get_ipython().run_cell_magic('time', '', "clf = SGDClassifier(random_state=0, class_weight='balanced', loss='log', penalty='elasticnet')\ncv = GridSearchCV(estimator=clf, param_grid=param_grid, n_jobs=-1, scoring='roc_auc')\ncv.fit(X = X_train_scale, y=y_train)")
 
 
 # In[15]:
@@ -148,8 +145,8 @@ ax.set_ylabel('Elastic net mixing parameter (l1_ratio)');
 
 # In[18]:
 
-y_pred_train = cv.decision_function(X_train_lda)
-y_pred_test = cv.decision_function(X_test_lda)
+y_pred_train = cv.decision_function(X_train_scale)
+y_pred_test = cv.decision_function(X_test_scale)
 
 def get_threshold_metrics(y_true, y_pred):
     roc_columns = ['fpr', 'tpr', 'threshold']
@@ -182,7 +179,7 @@ plt.legend(loc='lower right');
 
 # In[20]:
 
-X_transformed = lda.transform(pca.transform(X))
+X_transformed = scale_post.transform(pca.transform(scale_pre.transform(X)))
 
 
 # In[21]:
