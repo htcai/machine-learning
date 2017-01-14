@@ -93,7 +93,7 @@ X_test_scale = scale_pre.transform(X_test)
 
 # In[12]:
 
-n_components = 35
+n_components = 30
 pca = PCA(n_components=n_components, random_state=0)
 X_train_pca = pca.fit_transform(X_train_scale)
 X_test_pca = pca.transform(X_test_scale)
@@ -124,14 +124,14 @@ param_grid = {
 
 # In[16]:
 
-sss = StratifiedShuffleSplit(n_splits=10, test_size=0.3, random_state=0)
-cv_folds = sss.split(X_train_scale, y_train)
-cv_folds = [[t, c] for t, c in cv_folds]
+sss = StratifiedShuffleSplit(n_splits=150, test_size=0.1, random_state=0)
+clf = SGDClassifier(random_state=0, class_weight='balanced', loss='log', penalty='elasticnet')
+cv = GridSearchCV(estimator=clf, param_grid=param_grid, n_jobs=-1, scoring='roc_auc', cv=sss)
 
 
 # In[17]:
 
-get_ipython().run_cell_magic('time', '', "clf = SGDClassifier(random_state=0, class_weight='balanced', loss='log', penalty='elasticnet')\ncv = GridSearchCV(estimator=clf, param_grid=param_grid, n_jobs=-1, scoring='roc_auc')\ncv.fit(X = X_train_scale, y=y_train)")
+get_ipython().run_cell_magic('time', '', 'cv.fit(X = X_train_scale, y=y_train)')
 
 
 # In[18]:
