@@ -6,8 +6,6 @@
 # In[1]:
 
 import os
-import urllib
-import random
 import warnings
 
 import pandas as pd
@@ -16,7 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn import preprocessing
 from sklearn.linear_model import SGDClassifier
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, StratifiedShuffleSplit, GridSearchCV
 from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
@@ -65,54 +63,78 @@ y.head(6)
 
 # In[8]:
 
-# Here are the percentage of tumors with RIT1
-y.value_counts(True)
+# Here is the count of tumors with RIT1
+y.value_counts()
 
 
-# ## Set aside 20% of the data for testing
+# ## Set aside 30% of the data for testing
 
 # In[9]:
 
 # Typically, this can only be done where the number of mutations is large enough
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=0)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, stratify=y, random_state=0)
 'Size: {:,} features, {:,} training samples, {:,} testing samples'.format(len(X.columns), len(X_train), len(X_test))
 
 
-# ## Feature Standardization
-
 # In[10]:
 
-get_ipython().run_cell_magic('time', '', 'scale_pre = StandardScaler()\nX_train_scale = scale_pre.fit_transform(X_train)\nX_test_scale = scale_pre.transform(X_test)')
+# Here is the count of tumors with RIT1 in the testing data
+y_test.value_counts()
 
 
-# ## Reducing noise via PCA
+# ## Preprocessing and noise reduction
 
 # In[11]:
 
-get_ipython().run_cell_magic('time', '', 'n_components = 30\npca = PCA(n_components=n_components, random_state=0)\nX_train_pca = pca.fit_transform(X_train_scale)\nX_test_pca = pca.transform(X_test_scale)')
+scale_pre = StandardScaler()
+X_train_scale = scale_pre.fit_transform(X_train)
+X_test_scale = scale_pre.transform(X_test)
 
 
 # In[12]:
 
-get_ipython().run_cell_magic('time', '', 'scale_post = StandardScaler()\nX_train_scale = scale_post.fit_transform(X_train_pca)\nX_test_scale = scale_post.transform(X_test_pca)')
+n_components = 35
+pca = PCA(n_components=n_components, random_state=0)
+X_train_pca = pca.fit_transform(X_train_scale)
+X_test_pca = pca.transform(X_test_scale)
 
-
-# ## Parameters
 
 # In[13]:
 
-param_grid = {
-    'alpha': [10 ** x for x in range(-4, 1)],
-    'l1_ratio': [0, 0.2, 0.5, 0.8, 1],
-}
+# Percentage of preserved variance
+print('{:.4}'.format(sum(pca.explained_variance_ratio_)))
 
 
 # In[14]:
 
+scale_post = StandardScaler()
+X_train_scale = scale_post.fit_transform(X_train_pca)
+X_test_scale = scale_post.transform(X_test_pca)
+
+
+# ## Parameters and Classifier Fitting
+
+# In[15]:
+
+param_grid = {
+    'alpha': [2**x for x in range(-20, 60)],
+    'l1_ratio': [0]
+}
+
+
+# In[16]:
+
+sss = StratifiedShuffleSplit(n_splits=10, test_size=0.3, random_state=0)
+cv_folds = sss.split(X_train_scale, y_train)
+cv_folds = [[t, c] for t, c in cv_folds]
+
+
+# In[17]:
+
 get_ipython().run_cell_magic('time', '', "clf = SGDClassifier(random_state=0, class_weight='balanced', loss='log', penalty='elasticnet')\ncv = GridSearchCV(estimator=clf, param_grid=param_grid, n_jobs=-1, scoring='roc_auc')\ncv.fit(X = X_train_scale, y=y_train)")
 
 
-# In[15]:
+# In[18]:
 
 # Best Params
 print('{:.3%}'.format(cv.best_score_))
@@ -123,7 +145,7 @@ cv.best_params_
 
 # ## Visualize hyperparameters performance
 
-# In[16]:
+# In[19]:
 
 cv_result_df = pd.concat([
     pd.DataFrame(cv.cv_results_),
@@ -132,18 +154,25 @@ cv_result_df = pd.concat([
 cv_result_df.head(2)
 
 
-# In[17]:
+# In[20]:
 
 # Cross-validated performance heatmap
 cv_score_mat = pd.pivot_table(cv_result_df, values='mean_test_score', index='l1_ratio', columns='alpha')
-ax = sns.heatmap(cv_score_mat, annot=True, fmt='.1%')
+fig, ax = plt.subplots(figsize=(15,2))
+
+xticks = ['2^'+str(x) for x in range(-20, 60)]
+keptticks = xticks[::int(len(xticks)/10)]
+xticks = ['' for y in xticks]
+xticks[::int(len(xticks)/10)] = keptticks
+
+ax = sns.heatmap(cv_score_mat, annot=False, fmt='.1%', xticklabels=xticks)
 ax.set_xlabel('Regularization strength multiplier (alpha)')
 ax.set_ylabel('Elastic net mixing parameter (l1_ratio)');
 
 
 # ## Use Optimal Hyperparameters to Output ROC Curve
 
-# In[18]:
+# In[21]:
 
 y_pred_train = cv.decision_function(X_train_scale)
 y_pred_test = cv.decision_function(X_test_scale)
@@ -159,7 +188,7 @@ metrics_train = get_threshold_metrics(y_train, y_pred_train)
 metrics_test = get_threshold_metrics(y_test, y_pred_test)
 
 
-# In[19]:
+# In[22]:
 
 # Plot ROC
 plt.figure()
@@ -177,12 +206,12 @@ plt.legend(loc='lower right');
 
 # ## Investigate the predictions
 
-# In[20]:
+# In[23]:
 
 X_transformed = scale_post.transform(pca.transform(scale_pre.transform(X)))
 
 
-# In[21]:
+# In[24]:
 
 predict_df = pd.DataFrame.from_items([
     ('sample_id', X.index),
@@ -194,13 +223,13 @@ predict_df = pd.DataFrame.from_items([
 predict_df['probability_str'] = predict_df['probability'].apply('{:.1%}'.format)
 
 
-# In[22]:
+# In[25]:
 
 # Top predictions amongst negatives (potential hidden responders)
 predict_df.sort_values('decision_function', ascending=False).query("status == 0").head(10)
 
 
-# In[23]:
+# In[26]:
 
 # Ignore numpy warning caused by seaborn
 warnings.filterwarnings('ignore', 'using a non-integer number instead of an integer')
@@ -209,7 +238,7 @@ ax = sns.distplot(predict_df.query("status == 0").decision_function, hist=False,
 ax = sns.distplot(predict_df.query("status == 1").decision_function, hist=False, label='Positives')
 
 
-# In[24]:
+# In[27]:
 
 ax = sns.distplot(predict_df.query("status == 0").probability, hist=False, label='Negatives')
 ax = sns.distplot(predict_df.query("status == 1").probability, hist=False, label='Positives')
