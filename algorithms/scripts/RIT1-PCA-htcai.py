@@ -117,14 +117,14 @@ X_test_scale = scale_post.transform(X_test_pca)
 # In[15]:
 
 param_grid = {
-    'alpha': [2**x for x in range(-20, 60)],
-    'l1_ratio': [0]
+    'alpha': [2**x for x in range(-20, 30)],
+    'l1_ratio': [0, 0.05, 0.1, 0.15]
 }
 
 
 # In[16]:
 
-sss = StratifiedShuffleSplit(n_splits=150, test_size=0.1, random_state=0)
+sss = StratifiedShuffleSplit(n_splits=100, test_size=0.1, random_state=0)
 clf = SGDClassifier(random_state=0, class_weight='balanced', loss='log', penalty='elasticnet')
 cv = GridSearchCV(estimator=clf, param_grid=param_grid, n_jobs=-1, scoring='roc_auc', cv=sss)
 
@@ -160,7 +160,7 @@ cv_result_df.head(2)
 cv_score_mat = pd.pivot_table(cv_result_df, values='mean_test_score', index='l1_ratio', columns='alpha')
 fig, ax = plt.subplots(figsize=(15,2))
 
-xticks = ['2^'+str(x) for x in range(-20, 60)]
+xticks = ['2^'+str(x) for x in range(-20, 30)]
 keptticks = xticks[::int(len(xticks)/10)]
 xticks = ['' for y in xticks]
 xticks[::int(len(xticks)/10)] = keptticks
