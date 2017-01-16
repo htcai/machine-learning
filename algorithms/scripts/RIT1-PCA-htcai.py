@@ -170,9 +170,21 @@ ax.set_xlabel('Regularization strength multiplier (alpha)')
 ax.set_ylabel('Elastic net mixing parameter (l1_ratio)');
 
 
-# ## Use Optimal Hyperparameters to Output ROC Curve
+# ## Coefficients of the Classifier
 
 # In[21]:
+
+best_clf = cv.best_estimator_
+coef = best_clf.coef_[0]
+plt.figure(figsize = (15, 5))
+colors = ["red" if coef[i] < 0 else "blue" for i in range(len(coef))]
+plt.bar(np.arange(len(coef)), coef, color = colors)
+plt.xticks(np.arange(1, len(coef)+1), rotation=45, ha="right");
+
+
+# ## Use Optimal Hyperparameters to Output ROC Curve
+
+# In[22]:
 
 y_pred_train = cv.decision_function(X_train_scale)
 y_pred_test = cv.decision_function(X_test_scale)
@@ -188,7 +200,7 @@ metrics_train = get_threshold_metrics(y_train, y_pred_train)
 metrics_test = get_threshold_metrics(y_test, y_pred_test)
 
 
-# In[22]:
+# In[23]:
 
 # Plot ROC
 plt.figure()
@@ -206,12 +218,12 @@ plt.legend(loc='lower right');
 
 # ## Investigate the predictions
 
-# In[23]:
+# In[24]:
 
 X_transformed = scale_post.transform(pca.transform(scale_pre.transform(X)))
 
 
-# In[24]:
+# In[25]:
 
 predict_df = pd.DataFrame.from_items([
     ('sample_id', X.index),
@@ -223,13 +235,13 @@ predict_df = pd.DataFrame.from_items([
 predict_df['probability_str'] = predict_df['probability'].apply('{:.1%}'.format)
 
 
-# In[25]:
+# In[26]:
 
 # Top predictions amongst negatives (potential hidden responders)
 predict_df.sort_values('decision_function', ascending=False).query("status == 0").head(10)
 
 
-# In[26]:
+# In[27]:
 
 # Ignore numpy warning caused by seaborn
 warnings.filterwarnings('ignore', 'using a non-integer number instead of an integer')
@@ -238,7 +250,7 @@ ax = sns.distplot(predict_df.query("status == 0").decision_function, hist=False,
 ax = sns.distplot(predict_df.query("status == 1").decision_function, hist=False, label='Positives')
 
 
-# In[27]:
+# In[28]:
 
 ax = sns.distplot(predict_df.query("status == 0").probability, hist=False, label='Negatives')
 ax = sns.distplot(predict_df.query("status == 1").probability, hist=False, label='Positives')
