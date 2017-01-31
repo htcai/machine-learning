@@ -18,6 +18,7 @@ from sklearn.model_selection import train_test_split, StratifiedShuffleSplit, Gr
 from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.pipeline import Pipeline
 
 
 # In[2]:
@@ -86,35 +87,25 @@ y_test.value_counts()
 
 # In[11]:
 
-scale_pre = StandardScaler()
-X_train_scale = scale_pre.fit_transform(X_train)
-X_test_scale = scale_pre.transform(X_test)
+pipeline = Pipeline(steps=[
+    ('scale_pre', StandardScaler()),
+    ('pca', PCA(n_components=50, random_state=0)),
+    ('scale_post', StandardScaler()),
+])
+
+X_train_scale = pipeline.fit_transform(X_train, y_train)
+X_test_scale = pipeline.transform(X_test)
 
 
 # In[12]:
 
-n_components = 30
-pca = PCA(n_components=n_components, random_state=0)
-X_train_pca = pca.fit_transform(X_train_scale)
-X_test_pca = pca.transform(X_test_scale)
-
-
-# In[13]:
-
 # Percentage of preserved variance
-print('{:.4}'.format(sum(pca.explained_variance_ratio_)))
-
-
-# In[14]:
-
-scale_post = StandardScaler()
-X_train_scale = scale_post.fit_transform(X_train_pca)
-X_test_scale = scale_post.transform(X_test_pca)
+print('{:.4}'.format(sum(pipeline.named_steps['pca'].explained_variance_ratio_)))
 
 
 # ## Parameters and Classifier Fitting
 
-# In[15]:
+# In[13]:
 
 param_grid = {
     'alpha': [2**x for x in range(-20, 30)],
@@ -122,19 +113,19 @@ param_grid = {
 }
 
 
-# In[16]:
+# In[14]:
 
 sss = StratifiedShuffleSplit(n_splits=100, test_size=0.1, random_state=0)
 clf = SGDClassifier(random_state=0, class_weight='balanced', loss='log', penalty='elasticnet')
 cv = GridSearchCV(estimator=clf, param_grid=param_grid, n_jobs=-1, scoring='roc_auc', cv=sss)
 
 
-# In[17]:
+# In[15]:
 
 get_ipython().run_cell_magic('time', '', 'cv.fit(X = X_train_scale, y=y_train)')
 
 
-# In[18]:
+# In[16]:
 
 # Best Params
 print('{:.3%}'.format(cv.best_score_))
@@ -145,7 +136,7 @@ cv.best_params_
 
 # ## Visualize hyperparameters performance
 
-# In[19]:
+# In[17]:
 
 cv_result_df = pd.concat([
     pd.DataFrame(cv.cv_results_),
@@ -154,7 +145,7 @@ cv_result_df = pd.concat([
 cv_result_df.head(2)
 
 
-# In[20]:
+# In[18]:
 
 # Cross-validated performance heatmap
 cv_score_mat = pd.pivot_table(cv_result_df, values='mean_test_score', index='l1_ratio', columns='alpha')
@@ -172,7 +163,7 @@ ax.set_ylabel('Elastic net mixing parameter (l1_ratio)');
 
 # ## Coefficients of the Classifier
 
-# In[21]:
+# In[19]:
 
 best_clf = cv.best_estimator_
 coef = best_clf.coef_[0]
@@ -184,7 +175,7 @@ plt.xticks(np.arange(1, len(coef)+1), rotation=45, ha="right");
 
 # ## Use Optimal Hyperparameters to Output ROC Curve
 
-# In[22]:
+# In[20]:
 
 y_pred_train = cv.decision_function(X_train_scale)
 y_pred_test = cv.decision_function(X_test_scale)
@@ -200,7 +191,7 @@ metrics_train = get_threshold_metrics(y_train, y_pred_train)
 metrics_test = get_threshold_metrics(y_test, y_pred_test)
 
 
-# In[23]:
+# In[21]:
 
 # Plot ROC
 plt.figure()
@@ -218,12 +209,12 @@ plt.legend(loc='lower right');
 
 # ## Investigate the predictions
 
-# In[24]:
+# In[22]:
 
-X_transformed = scale_post.transform(pca.transform(scale_pre.transform(X)))
+X_transformed = pipeline.transform(X)
 
 
-# In[25]:
+# In[23]:
 
 predict_df = pd.DataFrame.from_items([
     ('sample_id', X.index),
@@ -235,13 +226,13 @@ predict_df = pd.DataFrame.from_items([
 predict_df['probability_str'] = predict_df['probability'].apply('{:.1%}'.format)
 
 
-# In[26]:
+# In[24]:
 
 # Top predictions amongst negatives (potential hidden responders)
 predict_df.sort_values('decision_function', ascending=False).query("status == 0").head(10)
 
 
-# In[27]:
+# In[25]:
 
 # Ignore numpy warning caused by seaborn
 warnings.filterwarnings('ignore', 'using a non-integer number instead of an integer')
@@ -250,7 +241,7 @@ ax = sns.distplot(predict_df.query("status == 0").decision_function, hist=False,
 ax = sns.distplot(predict_df.query("status == 1").decision_function, hist=False, label='Positives')
 
 
-# In[28]:
+# In[26]:
 
 ax = sns.distplot(predict_df.query("status == 0").probability, hist=False, label='Negatives')
 ax = sns.distplot(predict_df.query("status == 1").probability, hist=False, label='Positives')
